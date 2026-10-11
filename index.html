@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>M.A.N.G.O.S — CV Analyser &amp; Generator</title>
+  <meta name="description" content="Build an ATS-friendly engineering CV, get an honest senior-engineer review of your existing one, and tailor it to the MNC you're targeting.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cellipse cx='30' cy='38' rx='22' ry='20' fill='%23ffb020' transform='rotate(-25 30 38)'/%3E%3Cpath d='M38 16c6-8 16-8 20-6-2 8-10 14-20 6z' fill='%2334d399'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/styles.css">
+  <style id="cv-css"></style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <svg viewBox="0 0 64 64" width="32" height="32" aria-hidden="true"><ellipse cx="30" cy="38" rx="22" ry="20" fill="#ffb020" transform="rotate(-25 30 38)"/><ellipse cx="24" cy="32" rx="9" ry="6" fill="#ffd36b" opacity=".7" transform="rotate(-25 24 32)"/><path d="M38 16c6-8 16-8 20-6-2 8-10 14-20 6z" fill="#34d399"/></svg>
+    <div>
+      <div class="brand-name">M.A.N.G.O.S</div>
+      <div class="brand-sub">CV Analyser &amp; Generator</div>
+    </div>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-view="builder" role="tab">✍️ Builder</button>
+    <button class="tab" data-view="analyser" role="tab">🔍 Analyser</button>
+    <button class="tab" data-view="companies" role="tab">🏢 MNC Library</button>
+  </nav>
+  <button id="themeBtn" class="icon-btn" title="Toggle light / dark" aria-label="Toggle theme">🌓</button>
+</header>
+
+<main>
+  <!-- ================= BUILDER ================= -->
+  <section id="view-builder" class="view active">
+    <div class="builder">
+      <aside class="form-pane">
+        <div class="toolbar">
+          <label class="mini">Template
+            <select id="tplSelect">
+              <option value="classic">Classic (ATS-safest)</option>
+              <option value="modern">Modern accent</option>
+              <option value="compact">Compact (dense)</option>
+            </select>
+          </label>
+          <label class="mini">Accent <input type="color" id="accent" value="#d97706"></label>
+          <button id="btnSample" class="btn ghost">Load sample</button>
+          <button id="btnClear" class="btn ghost danger">Clear</button>
+        </div>
+        <div id="formRoot"></div>
+      </aside>
+
+      <div class="preview-pane">
+        <div class="panel tailor">
+          <div class="panel-h">
+            <h3>🎯 Tailor to a company</h3>
+            <span id="liveScore" class="chip" title="Live honest score of your CV as written">Score …</span>
+          </div>
+          <div class="tailor-controls">
+            <label class="mini">Target company
+              <select id="tailorCompany"><option value="">— none —</option></select>
+            </label>
+            <label class="mini">Role lens
+              <select id="tailorRole"></select>
+            </label>
+            <label class="check"><input type="checkbox" id="tailorApply" checked> Reorder skills &amp; bullets for this target</label>
+            <label class="check"><input type="checkbox" id="tailorHighlight" checked> Highlight matched keywords</label>
+          </div>
+          <div id="tailorOut" class="tailor-out muted">Pick a company to see keyword coverage, gaps, and what they look for. Tailoring only <em>reorders</em> your content — it never invents anything.</div>
+        </div>
+
+        <div class="export-bar">
+          <button id="btnPdf" class="btn primary">⬇ PDF (print)</button>
+          <button id="btnDoc" class="btn">Word (.doc)</button>
+          <button id="btnHtml" class="btn">HTML</button>
+          <button id="btnTxt" class="btn">Plain text (ATS)</button>
+          <button id="btnJson" class="btn">Save data (.json)</button>
+          <label class="btn">Load data <input type="file" id="importJson" accept=".json,application/json" hidden></label>
+          <button id="btnToAnalyser" class="btn accent">🔍 Analyse this CV</button>
+        </div>
+
+        <div class="paper-wrap"><div id="cvPaper" class="paper"><div id="cvPreview"></div></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ANALYSER ================= -->
+  <section id="view-analyser" class="view">
+    <div class="analyser-in">
+      <div class="panel">
+        <div class="panel-h"><h3>Upload or paste your CV</h3><span class="muted small">Analysed in your browser — nothing is uploaded.</span></div>
+        <div id="dropZone" class="drop" tabindex="0">
+          <div class="drop-ic">📄</div>
+          <div><b>Drop your CV here</b> or <u>browse</u></div>
+          <div class="muted small">PDF · DOCX · TXT · MD · or JSON saved from the Builder</div>
+          <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.md,.json,text/plain,application/pdf" hidden>
+        </div>
+        <div id="fileStatus" class="muted small" aria-live="polite"></div>
+        <textarea id="pasteBox" rows="9" placeholder="…or paste the plain text of your CV here"></textarea>
+        <div class="row-wrap">
+          <label class="mini">Role you're applying for
+            <select id="roleSelect"></select>
+          </label>
+          <button id="btnAnalyse" class="btn primary big">Analyse my CV</button>
+          <button id="btnSampleText" class="btn ghost">Try a sample</button>
+        </div>
+      </div>
+      <div class="panel honesty">
+        <h3>How this review works</h3>
+        <p>The analyser reads your CV the way a senior engineer who is hiring does: skimming for <b>evidence</b>, not adjectives. It scores six areas, then tells you the good and the bad without sugar-coating.</p>
+        <ul>
+          <li><b>Impact &amp; metrics</b> (25) — numbers and outcomes</li>
+          <li><b>Technical depth</b> (20) — stack, depth signals, evidence</li>
+          <li><b>Language</b> (15), <b>Structure/ATS</b> (15), <b>Credibility</b> (15), <b>Presentation</b> (10)</li>
+        </ul>
+        <p class="muted small">It's a rules-based review, not a human or an LLM — it can't verify your claims and it can miss nuance. For a deeper read, use the optional AI review below the results.</p>
+      </div>
+    </div>
+    <div id="results" aria-live="polite"></div>
+  </section>
+
+  <!-- ================= COMPANIES ================= -->
+  <section id="view-companies" class="view">
+    <div class="lib-head">
+      <h2>MNC hiring profiles</h2>
+      <p class="muted">What each company's engineers tend to look for, the keywords that matter, and how to write for them. These profiles are condensed from public career pages, engineering blogs and widely-known hiring practice — treat them as guidance, not insider rules.</p>
+      <input id="companySearch" type="search" placeholder="Filter companies or sectors…">
+    </div>
+    <div id="companyGrid" class="company-grid"></div>
+    <div id="companyDetail" class="panel detail" hidden></div>
+  </section>
+</main>
+
+<footer class="foot">M.A.N.G.O.S · everything runs locally in your browser · your CV never leaves this page unless you use the optional AI review</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js" defer></script>
+<script src="js/data.js" defer></script>
+<script src="js/analyzer.js" defer></script>
+<script src="js/generator.js" defer></script>
+<script src="js/app.js" defer></script>
+</body>
+</html>
