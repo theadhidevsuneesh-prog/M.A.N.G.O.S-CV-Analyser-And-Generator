@@ -36,9 +36,59 @@
     template: store.get("template", "classic"),
     accent: store.get("accent", "#d97706"),
     tailor: Object.assign({ company: "", role: "swe", apply: true, highlight: true }, store.get("tailor", {})),
+    ats: store.get("ats", true),
     analysis: null, rankings: null, role: store.get("analyserRole", "swe"), aiKey: ""
   };
-  const persist = () => store.set("cv", state.cv);
+  const persist = () => {
+    store.set("cv", state.cv);
+    const s = $("#saveState");
+    if (s) s.textContent = "Saved ✓ " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    meterSoon();
+  };
+
+  /* ---------- friendly feedback: toasts, confirm dialog, undo ---------- */
+  function toast(msg, o = {}) {
+    const el = document.createElement("div");
+    el.className = "toast " + (o.type || "");
+    el.innerHTML = `<span>${esc(msg)}</span>`;
+    if (o.action) {
+      const b = document.createElement("button");
+      b.className = "btn small";
+      b.textContent = o.action.label;
+      b.addEventListener("click", () => { o.action.fn(); el.remove(); });
+      el.appendChild(b);
+    }
+    $("#toasts").appendChild(el);
+    setTimeout(() => el.remove(), o.ms || (o.action ? 8000 : 3800));
+  }
+  function ask(message, o = {}) {
+    return new Promise((resolve) => {
+      const modal = $("#modal"), ok = $("#modalOk"), cancel = $("#modalCancel");
+      $("#modalMsg").textContent = message;
+      ok.textContent = o.ok || "Confirm";
+      ok.className = "btn " + (o.danger ? "danger-solid" : "primary");
+      modal.hidden = false;
+      ok.focus();
+      const done = (v) => {
+        modal.hidden = true;
+        ok.removeEventListener("click", yes); cancel.removeEventListener("click", no);
+        modal.removeEventListener("click", bg); document.removeEventListener("keydown", key);
+        resolve(v);
+      };
+      const yes = () => done(true), no = () => done(false);
+      const bg = (e) => { if (e.target === modal) done(false); };
+      const key = (e) => { if (e.key === "Escape") done(false); };
+      ok.addEventListener("click", yes); cancel.addEventListener("click", no);
+      modal.addEventListener("click", bg); document.addEventListener("keydown", key);
+    });
+  }
+  /** snapshot the CV so a destructive action can be undone from a toast */
+  function withUndo(label, fn) {
+    const snap = JSON.stringify(state.cv);
+    fn();
+    persist(); renderForm(); renderPreview();
+    toast(label, { action: { label: "Undo", fn: () => { state.cv = normalizeCv(JSON.parse(snap)); persist(); renderForm(); renderPreview(); toast("Restored."); } } });
+  }
 
   /* ============================== tabs / theme ============================== */
   function showView(name) {
@@ -134,11 +184,40 @@
     if (!btn) return;
     const { act, kind } = btn.dataset, i = +btn.dataset.i;
     const arr = state.cv[kind];
+    if (act === "del") { withUndo("Entry removed.", () => arr.splice(i, 1)); return; }
     if (act === "add") arr.push(G.emptyItem[kind]());
-    if (act === "del") { if (!confirm("Remove this entry?")) return; arr.splice(i, 1); }
     if (act === "up" && i > 0) [arr[i - 1], arr[i]] = [arr[i], arr[i - 1]];
     if (act === "down" && i < arr.length - 1) [arr[i + 1], arr[i]] = [arr[i], arr[i + 1]];
     persist(); renderForm(); renderPreview();
+    if (act === "add") {
+      const cards = $$(`#formRoot [data-path^="${kind}.${arr.length - 1}."]`);
+      if (cards[0]) cards[0].focus();
+    }
+  });
+
+  /* ---------- completeness meter ---------- */
+  function renderMeter() {
+    const c = state.cv, b = c.basics;
+    const bulletsOk = c.experience.some((e) => e.bullets.split("\n").filter((l) => l.trim()).length >= 2);
+    const items = [
+      ["Name", !!b.name.trim(), "basics"], ["Email & phone", !!(b.email.trim() && b.phone.trim()), "basics"],
+      ["Headline", !!b.title.trim(), "basics"], ["Summary", c.summary.trim().length > 40, "summary"],
+      ["Experience with 2+ bullets", bulletsOk, "exp"], ["Education", c.education.some((e) => e.school.trim() || e.degree.trim()), "edu"],
+      ["6+ skills", c.skills.reduce((n, s) => n + s.items.split(",").filter((x) => x.trim()).length, 0) >= 6, "skills"],
+      ["LinkedIn or GitHub", !!(b.linkedin.trim() || b.github.trim()), "basics"], ["A project", c.projects.some((p) => p.name.trim()), "proj"]
+    ];
+    const done = items.filter((x) => x[1]).length, pct = Math.round((done / items.length) * 100);
+    const todo = items.filter((x) => !x[1]);
+    $("#meter").innerHTML = `<div class="meter-h"><b>CV completeness</b><span style="color:${scoreColor(pct / 100)}"><b>${pct}%</b></span></div>
+      <div class="bar"><i style="width:${pct}%;background:${scoreColor(pct / 100)}"></i></div>
+      ${todo.length ? `<div class="hint" style="margin-bottom:6px">Still to add — click to jump:</div><div class="chips">${todo.map((x) => `<span class="chip warn" data-jump="${x[2]}">${esc(x[0])}</span>`).join("")}</div>` : '<div class="hint">All the essentials are in. Now polish the bullets and run the ATS check →</div>'}`;
+  }
+  const meterSoon = debounce(renderMeter, 150);
+  $("#meter").addEventListener("click", (e) => {
+    const j = e.target.closest("[data-jump]");
+    if (!j) return;
+    const d = $(`#formRoot details[data-sec="${j.dataset.jump}"]`);
+    if (d) { d.open = true; d.scrollIntoView({ behavior: "smooth", block: "start" }); const f = d.querySelector("input,textarea"); if (f) setTimeout(() => f.focus(), 250); }
   });
 
   /* ============================== BUILDER: preview / tailor ============================== */
@@ -156,10 +235,14 @@
     const { terms } = currentTarget();
     const hl = state.tailor.highlight && terms.length
       ? new RegExp(terms.map((t) => "(?:" + A.termSource(t) + ")").join("|"), "gi") : null;
-    $("#cvPreview").innerHTML = G.render(currentCv(), { template: state.template, accent: state.accent, highlight: hl });
+    $("#cvPreview").innerHTML = G.render(currentCv(), Object.assign(renderOpts(), { highlight: hl }));
+    const lock = state.ats;
+    $("#tplSelect").disabled = lock; $("#accent").disabled = lock;
+    $("#designHint").textContent = lock ? "🔒 Design is locked while ATS-friendly mode is on (plain, single-column, black on white)." : "Colour and layout look nicer to humans but are riskier for ATS parsers. Use ATS mode for online applications.";
     scoreSoon();
   }
   const previewSoon = debounce(renderPreview, 120);
+  const renderOpts = () => ({ template: state.ats ? "ats" : state.template, accent: state.accent });
 
   const renderLiveScore = () => {
     const a = A.analyze(G.toText(state.cv));
@@ -167,8 +250,49 @@
     chip.textContent = `Honest score ${a.score}/100 · ${a.grade}`;
     chip.style.color = scoreColor(a.score / 100);
     renderTailor(a);
+    renderAtsPanel(a);
   };
   const scoreSoon = debounce(renderLiveScore, 350);
+
+  /* ---------- ATS panel ---------- */
+  function renderAtsPanel(an) {
+    const { company, terms } = currentTarget();
+    let coverage = 0;
+    if (company || terms.length) {
+      const hit = terms.filter((t) => A.has(G.toText(state.cv).toLowerCase(), t)).length;
+      coverage = terms.length ? hit / terms.length : 0;
+    }
+    const checks = G.atsCheck(state.cv, { atsMode: state.ats, hasTarget: terms.length > 0, coverage });
+    const bad = checks.filter((c) => !c.ok), fixable = bad.filter((c) => c.fixable && c.id !== "layout");
+    const p = $("#atsPanel");
+    p.classList.toggle("off", !state.ats);
+    p.innerHTML = `
+      <div class="panel-h">
+        <label class="switch"><input type="checkbox" id="atsToggle" ${state.ats ? "checked" : ""}><span class="track"></span><span>ATS-friendly mode</span></label>
+        <span class="chip ${bad.length ? "warn" : "good"}" style="cursor:default">${checks.length - bad.length}/${checks.length} ATS checks passed</span>
+      </div>
+      <div class="hint">${state.ats ? "Plain single-column layout with standard headings — the format applicant-tracking systems parse most reliably." : "Switch this on before applying online: it removes colours, columns and decoration that confuse parsers."}</div>
+      <ul class="checks">${checks.map((c) => `<li class="${c.ok ? "ok" : "no"}"><span class="ic">${c.ok ? "✓" : "!"}</span><span>${esc(c.title)}${c.ok || !c.detail ? "" : `<small>${esc(c.detail)}</small>`}</span></li>`).join("")}</ul>
+      <div class="ats-actions">
+        ${fixable.length ? `<button class="btn primary" id="atsFix">✨ Fix ${fixable.length} issue${fixable.length > 1 ? "s" : ""} automatically</button>` : ""}
+        <button class="btn" id="atsDocx">⬇ Download ATS .docx</button>
+        <span class="hint">Auto-fix only cleans formatting (dates, symbols, skill bars) — it never changes your wording.</span>
+      </div>`;
+  }
+  $("#atsPanel").addEventListener("change", (e) => {
+    if (e.target.id !== "atsToggle") return;
+    state.ats = e.target.checked; store.set("ats", state.ats);
+    renderPreview();
+    toast(state.ats ? "ATS-friendly mode on — exports are now plain and parser-safe." : "ATS mode off — designed layouts are enabled.");
+  });
+  $("#atsPanel").addEventListener("click", (e) => {
+    if (e.target.id === "atsDocx") exportDocx();
+    if (e.target.id === "atsFix") {
+      const r = G.atsFix(state.cv);
+      if (!r.changes.length) { toast("Nothing to fix."); return; }
+      withUndo("Fixed: " + r.changes.join("; ") + ".", () => { state.cv = r.cv; });
+    }
+  });
 
   function chipList(items, cls, clickAttr) {
     const seen = new Set();
@@ -199,20 +323,20 @@
       <span class="hint">It adds [placeholders] you must fill with real numbers.</span>`;
   }
 
-  $("#tailorOut").addEventListener("click", (e) => {
+  $("#tailorOut").addEventListener("click", async (e) => {
     const chip = e.target.closest("[data-add]");
     if (chip) {
       const skill = chip.dataset.add;
-      if (!confirm(`Add "${skill}" to your skills?\n\nOnly do this if you can genuinely discuss it in an interview.`)) return;
-      let grp = state.cv.skills.find((s) => s.group.toLowerCase() === "additional");
-      if (!grp) { grp = { group: "Additional", items: "" }; state.cv.skills.push(grp); }
-      grp.items = grp.items ? grp.items + ", " + skill : skill;
-      persist(); renderForm(); renderPreview();
+      if (!(await ask(`Add "${skill}" to your skills?\n\nOnly do this if you can genuinely discuss it in an interview.`, { ok: "Yes, I have this skill" }))) return;
+      withUndo(`Added "${skill}" to Skills.`, () => {
+        let grp = state.cv.skills.find((s) => s.group.toLowerCase() === "additional");
+        if (!grp) { grp = { group: "Additional", items: "" }; state.cv.skills.push(grp); }
+        grp.items = grp.items ? grp.items + ", " + skill : skill;
+      });
     }
     if (e.target.id === "btnSummaryDraft") {
-      if (state.cv.summary.trim() && !confirm("Replace your current summary with a starter draft?")) return;
-      state.cv.summary = G.summaryDraft(state.cv, currentTarget().company);
-      persist(); renderForm(); renderPreview();
+      if (state.cv.summary.trim() && !(await ask("Replace your current summary with a starter draft?", { ok: "Replace" }))) return;
+      withUndo("Summary starter inserted — fill in the [placeholders].", () => { state.cv.summary = G.summaryDraft(state.cv, currentTarget().company); });
     }
   });
 
@@ -240,30 +364,37 @@
   }
 
   /* ---- toolbar actions ---- */
-  $("#btnSample").addEventListener("click", () => {
-    if (!confirm("Replace the current CV with the sample?")) return;
-    state.cv = G.sample(); persist(); renderForm(); renderPreview();
+  $("#btnSample").addEventListener("click", async () => {
+    if (!(await ask("Replace the current CV with the sample?\nYou can undo this right after.", { ok: "Load sample" }))) return;
+    withUndo("Sample CV loaded.", () => { state.cv = G.sample(); });
   });
-  $("#btnClear").addEventListener("click", () => {
-    if (!confirm("Clear everything? This can't be undone (export your data first if unsure).")) return;
-    state.cv = G.empty(); persist(); renderForm(); renderPreview();
+  $("#btnClear").addEventListener("click", async () => {
+    if (!(await ask("Clear the whole CV?\nYou can undo this right after.", { ok: "Clear everything", danger: true }))) return;
+    withUndo("CV cleared.", () => { state.cv = G.empty(); });
   });
+  const dl = (ext, mime, content, msg) => { G.download(G.slug(state.cv) + ext, mime, content); toast(msg || "Downloaded " + G.slug(state.cv) + ext, { type: "good" }); };
+  function exportDocx() {
+    // .docx is always the plain ATS layout, regardless of the on-screen design
+    const bytes = G.toDocx(currentCv());
+    dl(".docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", bytes);
+  }
+  $("#btnDocx").addEventListener("click", exportDocx);
   $("#btnPdf").addEventListener("click", () => {
-    if (!G.print(currentCv(), { template: state.template, accent: state.accent })) alert("The print window was blocked. Allow pop-ups for this page and try again.");
+    if (!G.print(currentCv(), renderOpts())) { toast("The print window was blocked — allow pop-ups for this page and try again.", { type: "bad" }); return; }
+    toast("In the print dialog choose “Save as PDF” and turn off “Headers and footers”.", { ms: 7000 });
   });
-  $("#btnHtml").addEventListener("click", () => G.download(G.slug(state.cv) + ".html", "text/html", G.fullHtml(currentCv(), { template: state.template, accent: state.accent })));
-  $("#btnDoc").addEventListener("click", () => G.download(G.slug(state.cv) + ".doc", "application/msword", G.fullHtml(currentCv(), { template: state.template, accent: state.accent })));
-  $("#btnTxt").addEventListener("click", () => G.download(G.slug(state.cv) + ".txt", "text/plain", G.toText(currentCv())));
-  $("#btnJson").addEventListener("click", () => G.download(G.slug(state.cv) + ".mangos.json", "application/json", JSON.stringify({ app: "M.A.N.G.O.S", version: 1, cv: state.cv }, null, 2)));
+  $("#btnHtml").addEventListener("click", () => dl(".html", "text/html", G.fullHtml(currentCv(), renderOpts())));
+  $("#btnDoc").addEventListener("click", () => dl(".doc", "application/msword", G.fullHtml(currentCv(), renderOpts())));
+  $("#btnTxt").addEventListener("click", () => dl(".txt", "text/plain", G.toText(currentCv())));
+  $("#btnJson").addEventListener("click", () => dl(".mangos.json", "application/json", JSON.stringify({ app: "M.A.N.G.O.S", version: 1, cv: state.cv }, null, 2), "Data file saved — use “Load my data” to restore it."));
   $("#importJson").addEventListener("change", async (e) => {
     const f = e.target.files[0];
     e.target.value = "";
     if (!f) return;
     try {
       const o = JSON.parse(await f.text());
-      state.cv = normalizeCv(o.cv || o);
-      persist(); renderForm(); renderPreview();
-    } catch (err) { alert("That file isn't valid M.A.N.G.O.S data."); }
+      withUndo("Data loaded.", () => { state.cv = normalizeCv(o.cv || o); });
+    } catch (err) { toast("That file isn't valid M.A.N.G.O.S data.", { type: "bad" }); }
   });
   $("#btnToAnalyser").addEventListener("click", () => {
     $("#pasteBox").value = G.toText(currentCv());
@@ -271,6 +402,8 @@
     showView("analyser");
     runAnalysis();
   });
+  // close the "More" menu when clicking elsewhere
+  document.addEventListener("click", (e) => { const d = $("details.more"); if (d && d.open && !d.contains(e.target)) d.open = false; });
 
   /* ============================== ANALYSER ============================== */
   const SAMPLE_TEXT = `Priya Nair
@@ -420,6 +553,16 @@ JavaScript, React, Node.js, HTML, CSS, SQL, MongoDB, Git, AWS, Docker, Python, J
     </div>`;
   }
 
+  /** the three things to fix first: worst findings in the heaviest-weighted areas */
+  function priorityCard(a) {
+    const weight = Object.fromEntries(a.categories.map((c) => [c.id, c.max * (1 - c.ratio)]));
+    const top = a.findings.filter((f) => f.type === "bad").sort((x, y) => (weight[y.cat] || 0) - (weight[x.cat] || 0)).slice(0, 3);
+    const fill = top.length < 3 ? top.concat(a.findings.filter((f) => f.type === "warn").sort((x, y) => (weight[y.cat] || 0) - (weight[x.cat] || 0)).slice(0, 3 - top.length)) : top;
+    if (!fill.length) return `<div class="panel priority"><div class="panel-h"><h3>🚀 Nothing urgent</h3></div><p class="muted">No major blockers found. Polish the bullets under “Line-by-line fixes” and tailor to your target company.</p></div>`;
+    return `<div class="panel priority"><div class="panel-h"><h3>🚀 Fix these first</h3><span class="muted small">Biggest score gains for the least effort</span></div>
+      <ol>${fill.map((f) => `<li><b>${esc(f.title)}</b><span>${esc(f.detail)}</span></li>`).join("")}</ol></div>`;
+  }
+
   function renderResults() {
     const a = state.analysis;
     const good = a.findings.filter((f) => f.type === "good");
@@ -445,6 +588,8 @@ JavaScript, React, Node.js, HTML, CSS, SQL, MongoDB, Git, AWS, Docker, Python, J
           </div>
         </div>
       </div>
+
+      ${priorityCard(a)}
 
       <div class="panel narr"><div class="panel-h"><h3>🧑‍💻 A senior engineer's take</h3></div>${a.narrative.map((p) => `<p>${md(p)}</p>`).join("")}</div>
 
@@ -485,7 +630,7 @@ JavaScript, React, Node.js, HTML, CSS, SQL, MongoDB, Git, AWS, Docker, Python, J
     if (saved) { $("#aiKey").value = saved; $("#aiRemember").checked = true; }
   }
 
-  $("#results").addEventListener("click", (e) => {
+  $("#results").addEventListener("click", async (e) => {
     const cc = e.target.closest("[data-company]");
     if (cc) {
       const r = state.rankings.find((x) => x.company.id === cc.dataset.company);
@@ -498,10 +643,11 @@ JavaScript, React, Node.js, HTML, CSS, SQL, MongoDB, Git, AWS, Docker, Python, J
     }
     if (e.target.id === "btnReport") G.download("cv-review.md", "text/markdown", reportMd());
     if (e.target.id === "btnImprove") {
-      if (!confirm("Replace the Builder's CV with a best-effort import of this text? (Export your current data first if you need it.)")) return;
-      state.cv = G.fromText(state.rawText);
-      persist(); renderForm(); renderPreview(); showView("builder");
+      if (!(await ask("Replace the Builder's CV with a best-effort import of this text?\nYou can undo this right after.", { ok: "Import into Builder" }))) return;
+      showView("builder");
+      withUndo("Imported. Check each section — headings and job entries need a quick tidy.", () => { state.cv = G.fromText(state.rawText); });
     }
+    if (e.target.dataset.go) showView(e.target.dataset.go);
     if (e.target.id === "btnAi") runAi();
   });
 
@@ -588,8 +734,14 @@ JavaScript, React, Node.js, HTML, CSS, SQL, MongoDB, Git, AWS, Docker, Python, J
   /* ============================== boot ============================== */
   initTailorControls();
   renderForm();
+  renderMeter();
   renderPreview();
   renderCompanyGrid();
+  const welcome = $("#welcome");
+  welcome.hidden = !!store.get("welcomeSeen", false);
+  $("#welcomeClose").addEventListener("click", () => { welcome.hidden = true; store.set("welcomeSeen", true); });
+  $("#helpBtn").addEventListener("click", () => { welcome.hidden = !welcome.hidden; if (!welcome.hidden) window.scrollTo({ top: 0, behavior: "smooth" }); });
+  welcome.addEventListener("click", (e) => { if (e.target.dataset.go) { showView(e.target.dataset.go); store.set("welcomeSeen", true); welcome.hidden = true; } });
   const lastView = store.get("view", "builder");
   if (["builder", "analyser", "companies"].includes(lastView)) showView(lastView);
   window.__mangos = { state, A, G };

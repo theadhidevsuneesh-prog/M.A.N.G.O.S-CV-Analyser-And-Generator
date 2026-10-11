@@ -4,7 +4,8 @@ An advanced, **zero-dependency** résumé toolkit for software engineers. Open `
 
 | | |
 |---|---|
-| **✍️ Builder** | Structured CV editor with live preview, 3 ATS-friendly templates, autosave, and exports to **PDF, Word (.doc), HTML, plain text (what an ATS sees) and JSON**. |
+| **✍️ Builder** | Structured CV editor with live preview, completeness meter, autosave and undo. Exports a real **Word .docx**, PDF, plain text (what an ATS sees), HTML and JSON. |
+| **🤖 ATS mode** | One switch gives a plain single-column layout with standard headings. An 11-point ATS checklist flags non-parseable dates, smart quotes/emoji, skill bars, empty entries, missing contact info and more — and **auto-fixes** the formatting issues in one click (never your wording). |
 | **🔍 Analyser** | Upload a **PDF / DOCX / TXT / MD** (or paste) and get a 0–100 score, grade, and an *honest* review written from the point of view of a senior engineer who is hiring: the good, the bad, line-by-line fixes, and the interview questions they'd ask. |
 | **🏢 MNC tailoring** | 22 hiring profiles (Google, Microsoft, Amazon, Meta, Apple, Netflix, NVIDIA, Adobe, Salesforce, Oracle, IBM, Intel, Cisco, SAP, Uber, Atlassian, Accenture, TCS, Infosys, JPMorgan Chase, Goldman Sachs, Deloitte). See your fit score, keyword gaps, and what each company weighs — then tailor the CV with one click. |
 | **🤖 Optional AI review** | Bring your own Anthropic API key for a deeper LLM read. Off by default; nothing is sent unless you press the button. |

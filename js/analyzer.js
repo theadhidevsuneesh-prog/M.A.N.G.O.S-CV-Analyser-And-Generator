@@ -404,6 +404,8 @@
     if (P.words >= 200 && P.pages > maxPages) F("structure", P.pages > maxPages + 0.9 ? "bad" : "warn", `~${P.pages} pages of content`, `With ${P.years || "<1"} years' experience, I expect ${P.years < 8 ? "one page" : "at most two"}. Cut the oldest and least relevant material first.`);
     else if (P.words >= 300) F("structure", "good", `Length looks right (~${P.pages} pages)`, "");
     if (P.words < 200) F("structure", "bad", "Very little content", "Under ~200 words I can't evaluate you at all — this will be rejected on sight.");
+    const fancy = (P.text.match(/[★☆●■▪✓✔►➢➤→\u{1F300}-\u{1FAFF}☀-➿]/gu) || []).length;
+    if (fancy >= 2) F("structure", "warn", `${fancy} decorative symbols / emoji`, "Icons, arrows and star ratings often turn into garbage in an ATS. Use plain text and standard bullets.");
     if (!P.ranges.length && P.words >= 150) F("structure", "warn", "No date ranges detected", "Roles and education need clear start/end dates (e.g. Jan 2022 – Present). Missing dates look like hiding something.");
 
     /* ---------- 5. CREDIBILITY & SENIORITY (15) ---------- */

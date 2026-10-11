@@ -23,23 +23,47 @@
     <button class="tab" data-view="analyser" role="tab">🔍 Analyser</button>
     <button class="tab" data-view="companies" role="tab">🏢 MNC Library</button>
   </nav>
+  <button id="helpBtn" class="icon-btn" title="Quick guide" aria-label="Show quick guide">?</button>
   <button id="themeBtn" class="icon-btn" title="Toggle light / dark" aria-label="Toggle theme">🌓</button>
 </header>
+
+<div id="welcome" class="welcome" hidden>
+  <div class="welcome-in">
+    <div class="welcome-h">
+      <div><h2>Welcome 👋 — three steps to a better CV</h2><p class="muted">Everything runs in your browser. Your CV is never uploaded.</p></div>
+      <button class="btn ghost" id="welcomeClose">Got it, hide this</button>
+    </div>
+    <div class="steps">
+      <div class="step"><span class="num">1</span><b>Build or import</b><p>Edit the sample in the <u>Builder</u>, or open the <u>Analyser</u> and drop in your existing CV.</p><button class="btn small" data-go="builder">Open Builder</button></div>
+      <div class="step"><span class="num">2</span><b>Make it ATS-safe</b><p>Keep <b>ATS-friendly mode</b> on, and press <b>Fix automatically</b> to clean dates, symbols and skill bars.</p><button class="btn small" data-go="analyser">Analyse a CV</button></div>
+      <div class="step"><span class="num">3</span><b>Tailor &amp; export</b><p>Pick a company to see keyword gaps, then download a <b>.docx</b> or <b>PDF</b>.</p><button class="btn small" data-go="companies">Browse companies</button></div>
+    </div>
+  </div>
+</div>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+<div id="modal" class="modal" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modalMsg">
+    <p id="modalMsg"></p>
+    <div class="modal-actions"><button class="btn" id="modalCancel">Cancel</button><button class="btn primary" id="modalOk">OK</button></div>
+  </div>
+</div>
 
 <main>
   <!-- ================= BUILDER ================= -->
   <section id="view-builder" class="view active">
     <div class="builder">
       <aside class="form-pane">
+        <div class="panel meter" id="meter"></div>
         <div class="toolbar">
-          <label class="mini">Template
+          <label class="mini">Design
             <select id="tplSelect">
-              <option value="classic">Classic (ATS-safest)</option>
+              <option value="classic">Classic</option>
               <option value="modern">Modern accent</option>
               <option value="compact">Compact (dense)</option>
             </select>
           </label>
           <label class="mini">Accent <input type="color" id="accent" value="#d97706"></label>
+          <div class="hint" id="designHint" style="flex-basis:100%"></div>
           <button id="btnSample" class="btn ghost">Load sample</button>
           <button id="btnClear" class="btn ghost danger">Clear</button>
         </div>
@@ -47,6 +71,24 @@
       </aside>
 
       <div class="preview-pane">
+        <div class="export-bar sticky">
+          <button id="btnDocx" class="btn primary" title="Best format for applicant tracking systems">⬇ Word (.docx)</button>
+          <button id="btnPdf" class="btn" title="Opens the print dialog — choose “Save as PDF”">⬇ PDF</button>
+          <button id="btnTxt" class="btn" title="Exactly what an ATS extracts">Plain text</button>
+          <details class="more"><summary class="btn">More ▾</summary>
+            <div class="more-menu">
+              <button id="btnHtml" class="btn ghost">HTML page</button>
+              <button id="btnDoc" class="btn ghost">Word (.doc, HTML-based)</button>
+              <button id="btnJson" class="btn ghost">Save my data (.json)</button>
+              <label class="btn ghost">Load my data <input type="file" id="importJson" accept=".json,application/json" hidden></label>
+            </div>
+          </details>
+          <button id="btnToAnalyser" class="btn accent">🔍 Analyse this CV</button>
+          <span id="saveState" class="muted small" title="Your work is saved automatically in this browser">Saved ✓</span>
+        </div>
+
+        <div class="panel ats" id="atsPanel"></div>
+
         <div class="panel tailor">
           <div class="panel-h">
             <h3>🎯 Tailor to a company</h3>
@@ -63,16 +105,6 @@
             <label class="check"><input type="checkbox" id="tailorHighlight" checked> Highlight matched keywords</label>
           </div>
           <div id="tailorOut" class="tailor-out muted">Pick a company to see keyword coverage, gaps, and what they look for. Tailoring only <em>reorders</em> your content — it never invents anything.</div>
-        </div>
-
-        <div class="export-bar">
-          <button id="btnPdf" class="btn primary">⬇ PDF (print)</button>
-          <button id="btnDoc" class="btn">Word (.doc)</button>
-          <button id="btnHtml" class="btn">HTML</button>
-          <button id="btnTxt" class="btn">Plain text (ATS)</button>
-          <button id="btnJson" class="btn">Save data (.json)</button>
-          <label class="btn">Load data <input type="file" id="importJson" accept=".json,application/json" hidden></label>
-          <button id="btnToAnalyser" class="btn accent">🔍 Analyse this CV</button>
         </div>
 
         <div class="paper-wrap"><div id="cvPaper" class="paper"><div id="cvPreview"></div></div></div>
